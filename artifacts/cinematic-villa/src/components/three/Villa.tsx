@@ -1,60 +1,18 @@
-import { Float, MeshReflectorMaterial, shaderMaterial } from "@react-three/drei";
+import { Float, MeshReflectorMaterial, RoundedBox, shaderMaterial } from "@react-three/drei";
 import { extend, useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import { Group } from "three";
+import { Color, Group, InstancedMesh, Mesh } from "three";
 import { experienceState } from "@/lib/animation-store";
 
-// ─── Materials (defined once, shared across meshes) ────────────────────────
-
-const matTravertine = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#cec5b5"),
-  roughness: 0.88,
-  metalness: 0.01,
-});
-
-const matDarkConcrete = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#1a1a1a"),
-  roughness: 0.82,
-  metalness: 0.08,
-});
-
-const matBlackMetal = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#0c0c0c"),
-  roughness: 0.18,
-  metalness: 0.88,
-});
-
-const matMullion = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#555555"),
-  roughness: 0.22,
-  metalness: 0.82,
-});
-
-const matGold = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#f4d58d"),
-  emissive: new THREE.Color("#9b6810"),
-  emissiveIntensity: 2.0,
-  roughness: 0.28,
-  metalness: 0.78,
-});
-
-const matPoolDeck = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#141412"),
-  roughness: 0.78,
-  metalness: 0.06,
-});
-
-const matPoolShell = new THREE.MeshStandardMaterial({
-  color: new THREE.Color("#090e14"),
-  roughness: 0.88,
-  metalness: 0.04,
-});
-
-// ─── Window interior shader ────────────────────────────────────────────────
-
+// ─── Window shader — enhanced with room-light hotspots ───────────────────
 const WindowMaterial = shaderMaterial(
-  { uTime: 0 },
+  {
+    uTime: 0,
+    uProgress: 0,
+    uColorA: new Color("#f5d795"),
+    uColorB: new Color("#64d9ff"),
+  },
   /* glsl */ `
     varying vec2 vUv;
     void main() {
@@ -64,325 +22,408 @@ const WindowMaterial = shaderMaterial(
   `,
   /* glsl */ `
     uniform float uTime;
+    uniform float uProgress;
+    uniform vec3 uColorA;
+    uniform vec3 uColorB;
     varying vec2 vUv;
+
+    float softCircle(vec2 uv, vec2 center, float r) {
+      return 1.0 - smoothstep(r * 0.4, r, length(uv - center));
+    }
+
     void main() {
-      // Clean warm-white interior ambiance — no scan lines
-      float vig = smoothstep(0.0, 0.055, vUv.x) * smoothstep(1.0, 0.945, vUv.x)
-                * smoothstep(0.0, 0.04,  vUv.y) * smoothstep(1.0, 0.96,  vUv.y);
-      float floorBounce = smoothstep(0.25, 0.0, vUv.y) * 0.22;
-      float ceilWash    = smoothstep(0.72, 1.0, vUv.y) * 0.10;
-      float base = 0.38 + floorBounce + ceilWash;
-      // Very subtle breathing variation
-      float breathe = 1.0 + sin(uTime * 0.18) * 0.025;
-      vec3 warmWhite = vec3(1.0, 0.89, 0.68) * breathe;
-      gl_FragColor = vec4(warmWhite * base, base * vig);
+      float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+      float topBot = smoothstep(0.0, 0.06, vUv.y) * smoothstep(1.0, 0.94, vUv.y);
+      float mask = edge * topBot;
+
+      // Base warm gradient
+      vec3 color = mix(uColorA, uColorB, vUv.y * 0.24 + uProgress * 0.16);
+
+      // Subtle scan shimmer
+      float scan = sin((vUv.y + uTime * 0.06) * 22.0) * 0.04;
+      color += scan;
+
+      // Room-light hotspots (chandelier-style ceiling lights)
+      float spot1 = softCircle(vUv, vec2(0.25, 0.85), 0.18) * 0.55;
+      float spot2 = softCircle(vUv, vec2(0.75, 0.85), 0.18) * 0.55;
+      float spot3 = softCircle(vUv, vec2(0.5,  0.82), 0.12) * 0.4;
+      color += vec3(1.0, 0.92, 0.70) * (spot1 + spot2 + spot3);
+
+      // Floor bounce (warm pooled light at bottom)
+      float floorGlow = smoothstep(0.3, 0.0, vUv.y) * 0.3;
+      color += vec3(1.0, 0.82, 0.5) * floorGlow;
+
+      float alpha = (0.52 + (spot1 + spot2 + spot3) * 0.3) * mask;
+      gl_FragColor = vec4(color, alpha);
     }
   `
 );
 extend({ WindowMaterial });
 
-// ─── GlazingBay: a full-height glass curtain wall section ─────────────────
-
-function GlazingBay({
-  width,
-  height,
-  panels,
+// ─── Window panel ────────────────────────────────────────────────────────
+function Window({
   position,
-  rotY = 0,
+  scale,
+  rotation,
 }: {
-  width: number;
-  height: number;
-  panels: number;
   position: [number, number, number];
-  rotY?: number;
+  scale: [number, number, number];
+  rotation?: [number, number, number];
 }) {
-  const winMat = useMemo(() => new WindowMaterial(), []);
+  const material = useMemo(() => new WindowMaterial(), []);
   useFrame((_, delta) => {
-    winMat.uniforms.uTime.value += delta;
+    material.uniforms.uTime.value += delta;
+    material.uniforms.uProgress.value = experienceState.progress;
+  });
+  return (
+    <mesh position={position} scale={scale} rotation={rotation ?? [0, 0, 0]}>
+      <boxGeometry args={[1, 1, 0.03]} />
+      <primitive object={material} attach="material" transparent depthWrite={false} />
+    </mesh>
+  );
+}
+
+// ─── Floating ambient orbs (firefly / lantern effect) ────────────────────
+const ORB_COUNT = 18;
+const orbData = Array.from({ length: ORB_COUNT }, (_, i) => ({
+  x: (Math.random() - 0.5) * 11,
+  y: 0.2 + Math.random() * 2.6,
+  z: (Math.random() - 0.5) * 5,
+  phase: Math.random() * Math.PI * 2,
+  speed: 0.28 + Math.random() * 0.38,
+  radius: 0.22 + Math.random() * 0.55,
+  color: Math.random() > 0.55
+    ? new Color("#ffe8b0")   // warm gold
+    : new Color("#aaddff"),  // cool teal/blue
+}));
+
+function FloatingOrbs() {
+  const ref = useRef<InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  useFrame(() => {
+    if (!ref.current) return;
+    const t = performance.now() * 0.001;
+    for (let i = 0; i < ORB_COUNT; i++) {
+      const o = orbData[i];
+      dummy.position.set(
+        o.x + Math.sin(t * o.speed + o.phase) * o.radius,
+        o.y + Math.sin(t * o.speed * 0.72 + o.phase + 1.1) * 0.18,
+        o.z + Math.cos(t * o.speed * 0.85 + o.phase) * o.radius * 0.6
+      );
+      dummy.scale.setScalar(0.038 + Math.sin(t * 1.2 + o.phase) * 0.012);
+      dummy.updateMatrix();
+      ref.current.setMatrixAt(i, dummy.matrix);
+    }
+    ref.current.instanceMatrix.needsUpdate = true;
   });
 
-  const panelW = width / panels;
-
   return (
-    <group position={position} rotation={[0, rotY, 0]}>
-      {/* Interior warm glow (sits at Z=0, facing camera) */}
-      <mesh>
-        <planeGeometry args={[width - 0.05, height - 0.04]} />
-        <primitive object={winMat} attach="material" transparent depthWrite={false} />
-      </mesh>
+    <instancedMesh ref={ref} args={[undefined, undefined, ORB_COUNT]}>
+      <sphereGeometry args={[1, 8, 8]} />
+      <meshStandardMaterial
+        emissive="#ffd090"
+        emissiveIntensity={6.5}
+        color="#000000"
+        transparent
+        opacity={0.85}
+      />
+    </instancedMesh>
+  );
+}
 
-      {/* Glass overlay — thin, slightly blue-tinted */}
-      <mesh position={[0, 0, 0.012]}>
-        <planeGeometry args={[width - 0.02, height - 0.02]} />
-        <meshPhysicalMaterial
-          color="#b8d0e0"
-          metalness={0.0}
-          roughness={0.03}
+// ─── Ground uplight ───────────────────────────────────────────────────────
+function GroundLight({ position }: { position: [number, number, number] }) {
+  return (
+    <mesh position={position}>
+      <sphereGeometry args={[0.038, 8, 8]} />
+      <meshStandardMaterial emissive="#ffe8c0" emissiveIntensity={5.0} color="#000000" />
+    </mesh>
+  );
+}
+
+// ─── Firepit / water-bowl feature ────────────────────────────────────────
+function FireFeature({ position }: { position: [number, number, number] }) {
+  const flameRef = useRef<Mesh>(null);
+  useFrame(() => {
+    if (!flameRef.current) return;
+    const t = performance.now() * 0.001;
+    flameRef.current.scale.setScalar(0.8 + Math.sin(t * 4.8) * 0.18);
+    (flameRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity =
+      5.5 + Math.sin(t * 7.2) * 1.5;
+  });
+  return (
+    <group position={position}>
+      {/* Stone bowl base */}
+      <mesh castShadow>
+        <cylinderGeometry args={[0.22, 0.18, 0.18, 16]} />
+        <meshStandardMaterial color="#111111" metalness={0.3} roughness={0.45} />
+      </mesh>
+      {/* Rim */}
+      <mesh position={[0, 0.1, 0]}>
+        <torusGeometry args={[0.22, 0.025, 8, 32]} />
+        <meshStandardMaterial color="#f4d58d" emissive="#a87620" emissiveIntensity={1.5} metalness={0.8} roughness={0.2} />
+      </mesh>
+      {/* Flame glow */}
+      <mesh ref={flameRef} position={[0, 0.24, 0]}>
+        <sphereGeometry args={[0.14, 10, 10]} />
+        <meshStandardMaterial
+          color="#ff6600"
+          emissive="#ff4400"
+          emissiveIntensity={5.5}
           transparent
-          opacity={0.18}
-          envMapIntensity={2.5}
+          opacity={0.82}
         />
       </mesh>
-
-      {/* Vertical mullions */}
-      {Array.from({ length: panels - 1 }, (_, i) => (
-        <mesh key={i} position={[-width / 2 + (i + 1) * panelW, 0, 0.018]} material={matMullion}>
-          <boxGeometry args={[0.032, height + 0.04, 0.055]} />
-        </mesh>
-      ))}
-
-      {/* Top rail */}
-      <mesh position={[0, height / 2 - 0.016, 0.018]} material={matMullion}>
-        <boxGeometry args={[width + 0.06, 0.04, 0.06]} />
-      </mesh>
-
-      {/* Bottom rail */}
-      <mesh position={[0, -height / 2 + 0.016, 0.018]} material={matMullion}>
-        <boxGeometry args={[width + 0.06, 0.04, 0.06]} />
-      </mesh>
-
-      {/* Outer frame (reveals depth) */}
-      <mesh position={[0, 0, -0.04]} material={matMullion}>
-        <boxGeometry args={[width + 0.14, height + 0.08, 0.06]} />
-      </mesh>
+      {/* Point light from flame */}
+      <pointLight color="#ff8822" intensity={1.6} distance={3.5} decay={2} position={[0, 0.35, 0]} />
     </group>
   );
 }
 
-// ─── Main component ────────────────────────────────────────────────────────
-
+// ─── Villa ────────────────────────────────────────────────────────────────
 export function Villa() {
   const group = useRef<Group>(null);
+  const poolWater = useRef<Mesh>(null);
 
   useFrame((_, delta) => {
     if (!group.current) return;
     const p = experienceState.progress;
-    const targetRot = Math.sin(p * Math.PI * 1.6) * 0.3 + p * 0.42;
-    group.current.rotation.y +=
-      (targetRot - group.current.rotation.y) * Math.min(delta * 1.1, 1);
-    group.current.position.y = Math.sin(performance.now() * 0.00036) * 0.016;
+    group.current.rotation.y += delta * (0.055 + experienceState.velocity * 0.025);
+    group.current.rotation.y =
+      group.current.rotation.y * 0.988 +
+      (Math.sin(p * Math.PI * 2) * 0.38 + p * 0.52) * 0.012;
+    group.current.position.y = Math.sin(performance.now() * 0.00042) * 0.028;
+    if (poolWater.current) poolWater.current.rotation.z += delta * 0.018;
   });
 
   return (
-    <Float speed={0.38} rotationIntensity={0.032} floatIntensity={0.032}>
-      <group ref={group} position={[0, -1.15, 0]}>
+    <Float speed={0.55} rotationIntensity={0.055} floatIntensity={0.055}>
+      <group ref={group} position={[0, -0.95, 0]}>
 
         {/* ── GROUND ── */}
-        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-          <planeGeometry args={[70, 70]} />
+        <mesh receiveShadow position={[0, -0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[44, 44]} />
           <MeshReflectorMaterial
-            color="#040404"
-            blur={[220, 70]}
-            resolution={1024}
-            mixBlur={0.52}
-            mixStrength={11}
-            roughness={0.22}
-            metalness={0.96}
-            mirror={0.68}
+            color="#020202"
+            blur={[180, 55]}
+            resolution={2048}
+            mixBlur={0.38}
+            mixStrength={8.0}
+            roughness={0.38}
+            metalness={0.88}
+            mirror={0.62}
           />
         </mesh>
 
-        {/* Site podium */}
-        <mesh receiveShadow position={[0, 0.065, 0]} material={matPoolDeck}>
-          <boxGeometry args={[22, 0.13, 11]} />
+        {/* Floating orbs atmosphere */}
+        <FloatingOrbs />
+
+        {/* Site base slab */}
+        <mesh receiveShadow position={[0, -0.1, 0]}>
+          <boxGeometry args={[14, 0.19, 8]} />
+          <meshStandardMaterial color="#0b0b0b" metalness={0.3} roughness={0.28} />
         </mesh>
 
-        {/* Raised house plinth */}
-        <mesh receiveShadow position={[0, 0.14, -0.4]} material={matPoolDeck}>
-          <boxGeometry args={[12.4, 0.1, 7.6]} />
+        {/* ── MAIN BUILDING ── */}
+
+        {/* Ground floor: long horizontal wing (cream/ivory) */}
+        <RoundedBox castShadow receiveShadow args={[9.2, 1.68, 3.4]} radius={0.04} position={[0, 0.82, 0]}>
+          <meshStandardMaterial color="#ede9e0" metalness={0.07} roughness={0.27} />
+        </RoundedBox>
+
+        {/* Upper studio wing (dark charcoal) */}
+        <RoundedBox castShadow receiveShadow args={[3.2, 1.38, 2.8]} radius={0.05} position={[2.4, 2.18, -0.3]}>
+          <meshStandardMaterial color="#101010" metalness={0.55} roughness={0.13} />
+        </RoundedBox>
+
+        {/* Main roof slab */}
+        <mesh castShadow receiveShadow position={[0, 1.72, 0]}>
+          <boxGeometry args={[9.7, 0.21, 3.82]} />
+          <meshStandardMaterial color="#050505" metalness={0.78} roughness={0.11} />
         </mesh>
 
-        {/* ── GROUND FLOOR ── */}
-
-        {/* Left solid travertine column */}
-        <mesh castShadow receiveShadow position={[-4.5, 1.09, -0.4]} material={matTravertine}>
-          <boxGeometry args={[2.6, 2.0, 4.2]} />
+        {/* Upper wing roof slab */}
+        <mesh castShadow receiveShadow position={[2.4, 2.9, -0.3]}>
+          <boxGeometry args={[3.6, 0.21, 3.2]} />
+          <meshStandardMaterial color="#050505" metalness={0.78} roughness={0.11} />
         </mesh>
 
-        {/* Right solid travertine column */}
-        <mesh castShadow receiveShadow position={[4.5, 1.09, -0.4]} material={matTravertine}>
-          <boxGeometry args={[2.6, 2.0, 4.2]} />
-        </mesh>
+        {/* ── FACADE DETAILS ── */}
 
-        {/* Centre infill (back of glass bay) */}
-        <mesh castShadow receiveShadow position={[0, 1.09, -0.4]} material={matTravertine}>
-          <boxGeometry args={[5.6, 2.0, 4.2]} />
-        </mesh>
-
-        {/* Ground floor front glazing — full-width centre bay */}
-        <GlazingBay
-          width={5.4} height={1.86}
-          panels={5}
-          position={[0, 1.09, 1.71]}
-        />
-
-        {/* Ground floor left-wing narrow windows */}
-        <GlazingBay
-          width={1.6} height={1.1}
-          panels={2}
-          position={[-4.5, 1.09, 1.71]}
-        />
-
-        {/* Ground floor right-wing narrow windows */}
-        <GlazingBay
-          width={1.6} height={1.1}
-          panels={2}
-          position={[4.5, 1.09, 1.71]}
-        />
-
-        {/* Ground floor roof slab — wide overhang */}
-        <mesh castShadow receiveShadow position={[0, 2.12, -0.4]} material={matBlackMetal}>
-          <boxGeometry args={[12.8, 0.22, 4.7]} />
-        </mesh>
-
-        {/* Gold fascia strip (underside front of roof) */}
-        <mesh position={[0, 2.0, 2.07]} material={matGold}>
-          <boxGeometry args={[12.8, 0.055, 0.055]} />
-        </mesh>
-
-        {/* ── UPPER FLOOR (cantilevered, offset left) ── */}
-
-        {/* Upper body — dark concrete, slightly narrower depth for setback */}
-        <mesh castShadow receiveShadow position={[-1.6, 3.02, -0.55]} material={matDarkConcrete}>
-          <boxGeometry args={[7.6, 1.7, 3.9]} />
-        </mesh>
-
-        {/* Upper front glazing */}
-        <GlazingBay
-          width={7.2} height={1.56}
-          panels={7}
-          position={[-1.6, 3.02, 1.41]}
-        />
-
-        {/* Upper right side glazing (visible on camera swing) */}
-        <GlazingBay
-          width={3.0} height={1.56}
-          panels={3}
-          position={[2.42, 3.02, -0.55]}
-          rotY={Math.PI / 2}
-        />
-
-        {/* Upper left side glazing */}
-        <GlazingBay
-          width={2.4} height={1.56}
-          panels={2}
-          position={[-5.42, 3.02, -0.55]}
-          rotY={Math.PI / 2}
-        />
-
-        {/* Upper floor roof slab */}
-        <mesh castShadow receiveShadow position={[-1.6, 3.9, -0.55]} material={matBlackMetal}>
-          <boxGeometry args={[8.2, 0.2, 4.4]} />
-        </mesh>
-
-        {/* Gold fascia strip (upper level) */}
-        <mesh position={[-1.6, 3.79, 1.66]} material={matGold}>
-          <boxGeometry args={[8.2, 0.05, 0.05]} />
-        </mesh>
-
-        {/* ── CANTILEVERED OVERHANG (drama detail) ── */}
-        {/* Thin soffit plate connecting right end of upper floor to right column below */}
-        <mesh castShadow position={[4.02, 2.14, -0.55]} material={matBlackMetal}>
-          <boxGeometry args={[3.0, 0.12, 3.9]} />
-        </mesh>
-
-        {/* Vertical support fin (ultra-thin, structural aesthetic) */}
-        <mesh castShadow position={[3.8, 1.09, -0.4]} material={matBlackMetal}>
-          <boxGeometry args={[0.07, 2.0, 4.2]} />
-        </mesh>
-        <mesh castShadow position={[-0.5, 1.09, -0.4]} material={matBlackMetal}>
-          <boxGeometry args={[0.07, 2.0, 4.2]} />
-        </mesh>
-
-        {/* ── ENTRANCE STEPS ── */}
-        {[0, 0.085, 0.17].map((yOff, i) => (
-          <mesh key={i} receiveShadow position={[0, 0.085 + yOff, 2.05 + i * 0.3]} material={matBlackMetal}>
-            <boxGeometry args={[11.0, 0.088, 0.32]} />
+        {/* Wood screen slats (decorative front-left facade) */}
+        {Array.from({ length: 15 }, (_, i) => (
+          <mesh key={`slat-${i}`} castShadow position={[-4.4 + i * 0.27, 0.82, 1.72]}>
+            <boxGeometry args={[0.065, 1.62, 0.13]} />
+            <meshStandardMaterial color="#5e3418" metalness={0.1} roughness={0.84} />
           </mesh>
         ))}
 
-        {/* ── INFINITY POOL ── */}
+        {/* Long glazing strip — ground floor front (enhanced) */}
+        <Window position={[-0.5, 0.88, 1.71]} scale={[6.0, 0.74, 1]} />
 
-        {/* Pool deck (extends to right of house) */}
-        <mesh receiveShadow position={[7.6, 0.065, 0.2]} material={matPoolDeck}>
-          <boxGeometry args={[6.2, 0.13, 8.5]} />
+        {/* Upper wing front glazing */}
+        <Window position={[2.4, 2.18, 0.62]} scale={[2.8, 0.94, 1]} />
+
+        {/* Upper wing side glazing */}
+        <Window position={[4.02, 2.18, -0.3]} scale={[2.4, 0.94, 1]} rotation={[0, Math.PI / 2, 0]} />
+
+        {/* ── GOLD VERTICAL FINS (wow accent) ── */}
+        {[-4.3, -3.3, 3.3, 4.3].map((x, i) => (
+          <mesh key={`fin-${i}`} castShadow position={[x, 0.9, 1.74]}>
+            <boxGeometry args={[0.04, 1.68, 0.06]} />
+            <meshStandardMaterial
+              color="#f4d58d"
+              emissive="#c8820a"
+              emissiveIntensity={2.8}
+              metalness={0.82}
+              roughness={0.18}
+            />
+          </mesh>
+        ))}
+
+        {/* ── ENTRANCE CANOPY ── */}
+        <mesh castShadow receiveShadow position={[-2.7, 1.86, 2.62]}>
+          <boxGeometry args={[2.4, 0.16, 1.6]} />
+          <meshStandardMaterial color="#070707" metalness={0.74} roughness={0.12} />
+        </mesh>
+        <mesh castShadow position={[-3.65, 0.92, 3.2]}>
+          <cylinderGeometry args={[0.058, 0.058, 1.86, 12]} />
+          <meshStandardMaterial color="#0a0a0a" metalness={0.65} roughness={0.16} />
+        </mesh>
+        <mesh castShadow position={[-1.75, 0.92, 3.2]}>
+          <cylinderGeometry args={[0.058, 0.058, 1.86, 12]} />
+          <meshStandardMaterial color="#0a0a0a" metalness={0.65} roughness={0.16} />
         </mesh>
 
-        {/* Pool shell */}
-        <mesh receiveShadow position={[7.6, -0.055, 0.2]} material={matPoolShell}>
-          <boxGeometry args={[5.2, 0.28, 7.2]} />
+        {/* ── GOLD ACCENTS ── */}
+
+        {/* Horizontal gold LED strip — base of ground floor front */}
+        <mesh position={[-0.5, 0.12, 1.73]}>
+          <boxGeometry args={[8.6, 0.055, 0.07]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#c8820a" emissiveIntensity={2.4} />
         </mesh>
 
-        {/* Pool coping — thin polished stone lip */}
-        <mesh receiveShadow position={[7.6, 0.2, 0.2]}>
-          <boxGeometry args={[5.4, 0.08, 7.4]} />
-          <meshStandardMaterial color="#1e1c18" roughness={0.76} metalness={0.06} />
+        {/* Gold LED strip — top of ground floor front (under roof overhang) */}
+        <mesh position={[-0.5, 1.63, 1.73]}>
+          <boxGeometry args={[8.6, 0.04, 0.05]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#c8820a" emissiveIntensity={2.0} />
+        </mesh>
+
+        {/* Gold vertical seam on upper wing corner */}
+        <mesh position={[3.82, 2.18, -0.3]}>
+          <boxGeometry args={[0.05, 1.4, 2.85]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#a87620" emissiveIntensity={1.5} />
+        </mesh>
+
+        {/* Gold header above canopy */}
+        <mesh position={[-2.7, 1.96, 2.62]}>
+          <boxGeometry args={[2.4, 0.04, 0.06]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#a87620" emissiveIntensity={2.0} />
+        </mesh>
+
+        {/* ── INTERIOR POINT LIGHTS (spill through windows) ── */}
+        <pointLight position={[-0.5, 0.9, 1.2]} intensity={1.2} color="#ffd888" distance={4} decay={2} />
+        <pointLight position={[2.4, 2.2, 0.0]} intensity={0.9} color="#ffe0a0" distance={3.5} decay={2} />
+
+        {/* ── SWIMMING POOL ── */}
+
+        {/* Pool surround (dark stone deck) */}
+        <mesh receiveShadow position={[-5.2, -0.05, 0.2]}>
+          <boxGeometry args={[3.6, 0.23, 6.4]} />
+          <meshStandardMaterial color="#0d0d0d" metalness={0.26} roughness={0.22} />
+        </mesh>
+
+        {/* Pool shell edge/coping */}
+        <mesh receiveShadow position={[-5.2, 0.07, 0.2]}>
+          <boxGeometry args={[3.0, 0.06, 5.8]} />
+          <meshStandardMaterial color="#1c1c1c" metalness={0.4} roughness={0.18} />
         </mesh>
 
         {/* Pool water surface */}
-        <mesh receiveShadow position={[7.6, 0.18, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[5.0, 7.0, 32, 32]} />
+        <mesh ref={poolWater} receiveShadow position={[-5.2, 0.11, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[2.75, 5.5, 32, 32]} />
           <MeshReflectorMaterial
-            color="#020c18"
-            blur={[140, 50]}
-            resolution={512}
-            mixBlur={0.4}
-            mixStrength={6}
-            roughness={0.05}
-            metalness={0.35}
-            mirror={0.94}
+            color="#061826"
+            blur={[90, 32]}
+            resolution={1024}
+            mixStrength={4.5}
+            roughness={0.06}
+            metalness={0.28}
+            mirror={0.92}
           />
         </mesh>
 
-        {/* Pool underwater glow lights */}
-        {[-2.4, 0, 2.4].map((z, i) => (
-          <mesh key={i} position={[10.05, 0.14, 0.2 + z]}>
-            <sphereGeometry args={[0.048, 8, 8]} />
-            <meshStandardMaterial emissive="#005588" emissiveIntensity={7} color="#000000" />
+        {/* Pool underwater lights */}
+        {[-1.8, 0, 1.8].map((z, i) => (
+          <mesh key={`pool-light-${i}`} position={[-5.2, 0.09, 0.2 + z]}>
+            <sphereGeometry args={[0.065, 8, 8]} />
+            <meshStandardMaterial emissive="#0099dd" emissiveIntensity={6.5} color="#000000" />
           </mesh>
         ))}
 
-        {/* Infinity edge (overflow trough) — far right end of pool */}
-        <mesh position={[10.12, 0.13, 0.2]}>
-          <boxGeometry args={[0.055, 0.1, 7.0]} />
-          <meshStandardMaterial color="#020c18" roughness={0.08} metalness={0.2} transparent opacity={0.6} />
+        {/* Pool point light (blue ambient spill) */}
+        <pointLight position={[-5.2, 0.5, 0.2]} intensity={1.2} color="#0077bb" distance={5} decay={2} />
+
+        {/* Pool edge gold coping glow strip */}
+        <mesh position={[-3.64, 0.1, 0.2]}>
+          <boxGeometry args={[0.04, 0.04, 5.8]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#c8820a" emissiveIntensity={1.6} />
         </mesh>
 
-        {/* ── DECORATIVE LIGHTING ── */}
+        {/* ── FIRE FEATURES ── */}
+        <FireFeature position={[3.8, -0.01, 3.6]} />
+        <FireFeature position={[-3.5, -0.01, 3.6]} />
 
-        {/* Facade LED strips — ground level, running along front base */}
-        <mesh position={[0, 0.2, 1.78]}>
-          <boxGeometry args={[11.6, 0.028, 0.028]} />
-          <meshStandardMaterial emissive="#ffe0a0" emissiveIntensity={2.2} color="#000000" />
+        {/* ── GROUND UPLIGHTS ── */}
+        {[-3.8, -2.2, -0.6, 1.0, 2.6, 4.0].map((x, i) => (
+          <GroundLight key={`ul-${i}`} position={[x, -0.15, 1.88]} />
+        ))}
+
+        {/* Pool-side uplights */}
+        {[-2.4, 0.4, 2.8].map((z, i) => (
+          <GroundLight key={`pool-ul-${i}`} position={[-3.6, -0.15, 0.2 + z - 1.2]} />
+        ))}
+
+        {/* ── LOW PERIMETER WALL ── */}
+        <mesh receiveShadow position={[0, -0.01, 4.55]}>
+          <boxGeometry args={[15, 0.48, 0.22]} />
+          <meshStandardMaterial color="#0a0a0a" metalness={0.22} roughness={0.36} />
         </mesh>
 
-        {/* Under-roof LED — ground floor overhang soffit */}
-        <mesh position={[0, 1.98, 1.42]}>
-          <boxGeometry args={[11.6, 0.02, 0.02]} />
-          <meshStandardMaterial emissive="#fffae0" emissiveIntensity={1.5} color="#000000" />
+        {/* Perimeter wall top gold cap */}
+        <mesh position={[0, 0.24, 4.55]}>
+          <boxGeometry args={[15, 0.04, 0.26]} />
+          <meshStandardMaterial color="#f4d58d" emissive="#a87620" emissiveIntensity={1.2} metalness={0.75} roughness={0.25} />
         </mesh>
 
-        {/* Under-roof LED — upper floor overhang soffit */}
-        <mesh position={[-1.6, 3.77, 1.62]}>
-          <boxGeometry args={[8.0, 0.02, 0.02]} />
-          <meshStandardMaterial emissive="#fffae0" emissiveIntensity={1.5} color="#000000" />
-        </mesh>
+        {/* ── ENTRANCE PLANTERS (architectural, no greenery) ── */}
+        {[-3.8, 0.8].map((x, i) => (
+          <group key={`planter-${i}`} position={[x, 0, 3.6]}>
+            <mesh castShadow>
+              <boxGeometry args={[1.1, 0.36, 0.58]} />
+              <meshStandardMaterial color="#0d0d0d" metalness={0.25} roughness={0.35} />
+            </mesh>
+            {/* Gold trim on planter top edge */}
+            <mesh position={[0, 0.2, 0]}>
+              <boxGeometry args={[1.12, 0.04, 0.60]} />
+              <meshStandardMaterial color="#f4d58d" emissive="#a87620" emissiveIntensity={1.4} metalness={0.8} roughness={0.2} />
+            </mesh>
+            {/* Planter interior — dark stone */}
+            <mesh position={[0, 0.28, 0]}>
+              <boxGeometry args={[0.96, 0.12, 0.46]} />
+              <meshStandardMaterial color="#0a0a0a" roughness={0.82} metalness={0} />
+            </mesh>
+          </group>
+        ))}
 
-        {/* Pool edge glow */}
-        <mesh position={[10.1, 0.2, 0.2]}>
-          <boxGeometry args={[0.02, 0.02, 7.0]} />
-          <meshStandardMaterial emissive="#0077bb" emissiveIntensity={2.0} color="#000000" />
-        </mesh>
-
-        {/* ── SCENE LIGHTING ── */}
-        {/* Warm interior spill through ground floor glazing */}
-        <pointLight position={[0, 1.1, 1.0]} intensity={1.8} color="#ffd890" distance={5} decay={2} />
-        {/* Warm interior spill through upper floor glazing */}
-        <pointLight position={[-1.6, 3.0, 1.0]} intensity={1.4} color="#ffd890" distance={5} decay={2} />
-        {/* Pool underwater blue */}
-        <pointLight position={[7.6, 0.6, 0.2]} intensity={1.0} color="#005588" distance={7} decay={2} />
-        {/* Cool ambient fill from above */}
-        <pointLight position={[0, 6, 0]} intensity={0.3} color="#c8d8f0" distance={14} decay={2} />
+        {/* ── GARDEN STEPS ── */}
+        {[0.12, 0.24, 0.36].map((y, i) => (
+          <mesh key={`step-${i}`} receiveShadow position={[-2.7, y - 0.07, 3.35 + i * 0.24]}>
+            <boxGeometry args={[2.2, 0.13, 0.26]} />
+            <meshStandardMaterial color="#111111" metalness={0.32} roughness={0.28} />
+          </mesh>
+        ))}
 
       </group>
     </Float>
