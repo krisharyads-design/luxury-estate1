@@ -1,44 +1,54 @@
-# [Project name]
+# Cinematic Villa Experience
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A cinematic WebGL luxury real estate experience showcasing India's finest properties with 3D scroll-driven animations.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/cinematic-villa run dev` — run the frontend (port assigned by workflow)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — Postgres connection string (not actively used; no API backend required)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite (`artifacts/cinematic-villa`)
+- 3D: Three.js via `@react-three/fiber`, `@react-three/drei`, `@react-three/postprocessing`
+- Animations: GSAP + ScrollTrigger, Framer Motion
+- Smooth scroll: Lenis
+- Styling: Tailwind CSS v4 with custom gold color theme
+- Build: Vite
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/cinematic-villa/src/` — all frontend source code
+- `artifacts/cinematic-villa/src/components/sections/` — page sections (Hero, Story, Gallery, Properties, etc.)
+- `artifacts/cinematic-villa/src/components/three/` — Three.js 3D scene components (Scene, Villa, CameraRig, etc.)
+- `artifacts/cinematic-villa/src/lib/animation-store.ts` — shared scroll/animation state (progress, velocity, etc.)
+- `artifacts/cinematic-villa/public/images/` — luxury gallery sprite image
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Single-page app with no backend — all content is static/inline data.
+- Three.js 3D scene is lazy-loaded and gracefully falls back to black background if WebGL is unavailable (e.g. in preview sandboxes).
+- GSAP ScrollTrigger + Lenis power all scroll-driven camera and section animations.
+- Gold color theme defined in Tailwind v4 `@theme` block in `index.css`.
+- All Next.js-specific patterns removed: `"use client"` directives, `next/dynamic`, `next/image`, `next/link` replaced with React equivalents.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
-
-## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
+A single-page luxury real estate experience with:
+- Scroll-driven 3D WebGL villa visualization
+- Kinetic typography and parallax section animations
+- Property cards for 6 Indian luxury estates
+- Services grid with 3D tilt effects
+- Animated testimonials marquee
+- Consultation booking modal with form
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- WebGL won't render in the Replit preview iframe (no GPU access) — the 3D scene shows a black background there. It works in a real browser.
+- The gallery uses a single sprite image (`/images/luxury-gallery-sprite.png`) with `background-position` to simulate multiple property images.
 
 ## Pointers
 
