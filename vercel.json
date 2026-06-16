@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/cinematic-villa run build",
+  "outputDirectory": "artifacts/cinematic-villa/dist/public"
+}
