@@ -8,12 +8,12 @@ const lookAt = new Vector3(0, 0.6, 0);
 const target = new Vector3();
 
 const path = [
-  new Vector3(0, 2.15, 8.4),
-  new Vector3(5.2, 2.7, 6.1),
-  new Vector3(-4.8, 3.2, 4.4),
-  new Vector3(0, 1.45, 5.2),
-  new Vector3(3.8, 2.1, 7),
-  new Vector3(0, 1.72, 3.7)
+  new Vector3(0, 2.8, 15.5),
+  new Vector3(6.5, 3.2, 11.5),
+  new Vector3(-5.8, 3.8, 9.2),
+  new Vector3(0, 2.0, 10.0),
+  new Vector3(4.5, 2.6, 12.5),
+  new Vector3(0, 2.2, 8.0)
 ];
 
 function samplePath(progress: number) {
@@ -46,7 +46,7 @@ export function CameraRig() {
       Math.cos(p * Math.PI * 1.4) * 0.35
     );
     perspectiveCamera.lookAt(lookAt);
-    perspectiveCamera.fov = MathUtils.lerp(perspectiveCamera.fov, 38 - p * 9 + experienceState.velocity * 2, 0.04);
+    perspectiveCamera.fov = MathUtils.lerp(perspectiveCamera.fov, 52 - p * 11 + experienceState.velocity * 2, 0.04);
     perspectiveCamera.updateProjectionMatrix();
   });
 

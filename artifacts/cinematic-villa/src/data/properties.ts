@@ -6,6 +6,7 @@ export type Property = {
   agent: string;
   agentPhone: string;
   tag: string;
+  image: string;
   imagePosition: string;
   bedrooms: number;
   bathrooms: number;
@@ -26,6 +27,7 @@ export const properties: Property[] = [
     agent: "Aarav Mehta",
     agentPhone: "+91 98100 12345",
     tag: "Private pool villa",
+    image: "/images/prop-aravalli.png",
     imagePosition: "bg-left-top",
     bedrooms: 5,
     bathrooms: 6,
@@ -59,6 +61,7 @@ export const properties: Property[] = [
     agent: "Priya Nair",
     agentPhone: "+91 98200 23456",
     tag: "Sea-facing duplex",
+    image: "/images/prop-juhu.png",
     imagePosition: "bg-right-top",
     bedrooms: 4,
     bathrooms: 5,
@@ -92,6 +95,7 @@ export const properties: Property[] = [
     agent: "Rohan Iyer",
     agentPhone: "+91 98300 34567",
     tag: "Penthouse residence",
+    image: "/images/prop-sky-house.png",
     imagePosition: "bg-left-bottom",
     bedrooms: 3,
     bathrooms: 4,
@@ -125,6 +129,7 @@ export const properties: Property[] = [
     agent: "Ananya Sen",
     agentPhone: "+91 98400 45678",
     tag: "Heritage garden home",
+    image: "/images/prop-alipore.png",
     imagePosition: "bg-right-bottom",
     bedrooms: 6,
     bathrooms: 7,
@@ -158,6 +163,7 @@ export const properties: Property[] = [
     agent: "Vikram Rao",
     agentPhone: "+91 98500 56789",
     tag: "Coastal weekend estate",
+    image: "/images/prop-ecr.png",
     imagePosition: "bg-center",
     bedrooms: 4,
     bathrooms: 5,
@@ -191,6 +197,7 @@ export const properties: Property[] = [
     agent: "Kavya Malhotra",
     agentPhone: "+91 98600 67890",
     tag: "Ultra-prime apartment",
+    image: "/images/prop-lutyens.png",
     imagePosition: "bg-right",
     bedrooms: 6,
     bathrooms: 8,

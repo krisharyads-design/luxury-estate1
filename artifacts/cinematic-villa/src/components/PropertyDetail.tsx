@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Bath, Bed, CalendarDays, ChevronRight, Home, MapPin, Phone, Ruler } from "lucide-react";
 import { ConsultationModal } from "./ConsultationModal";
@@ -9,11 +9,16 @@ type Props = {
 };
 
 const ROOM_LABELS = ["Living Room", "Master Suite", "Kitchen", "Garden", "Pool View", "Entrance"];
+const GALLERY_POSITIONS = ["center", "top center", "bottom center", "center left", "center right", "top left"];
 
 export function PropertyDetail({ id }: Props) {
   const [, navigate] = useLocation();
   const [isConsultOpen, setIsConsultOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [id]);
 
   const property = getPropertyById(id);
 
@@ -49,8 +54,10 @@ export function PropertyDetail({ id }: Props) {
 
         {/* HERO */}
         <div className="relative h-[80vh] min-h-[520px] overflow-hidden">
-          <div
-            className={`absolute inset-0 bg-[url('/images/luxury-gallery-sprite.png')] bg-[length:220%_220%] ${property.imagePosition} transition-all duration-700`}
+          <img
+            src={property.image}
+            alt={property.name}
+            className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10" />
           <div className="absolute bottom-0 left-0 right-0 p-8 md:p-14">
@@ -104,8 +111,11 @@ export function PropertyDetail({ id }: Props) {
 
                 {/* Main image */}
                 <div className="relative mb-3 aspect-[1.62] overflow-hidden border border-white/8">
-                  <div
-                    className={`absolute inset-0 bg-[url('/images/luxury-gallery-sprite.png')] bg-[length:220%_220%] ${property.galleryPositions[activeImage]} transition-all duration-500`}
+                  <img
+                    src={property.image}
+                    alt={ROOM_LABELS[activeImage]}
+                    className="absolute inset-0 h-full w-full object-cover transition-all duration-500"
+                    style={{ objectPosition: GALLERY_POSITIONS[activeImage] }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-4 left-4 text-xs uppercase tracking-[0.26em] text-white/70">
@@ -115,7 +125,7 @@ export function PropertyDetail({ id }: Props) {
 
                 {/* Thumbnail strip */}
                 <div className="grid grid-cols-6 gap-2">
-                  {property.galleryPositions.map((pos, i) => (
+                  {ROOM_LABELS.map((label, i) => (
                     <button
                       key={i}
                       onClick={() => setActiveImage(i)}
@@ -125,8 +135,11 @@ export function PropertyDetail({ id }: Props) {
                           : "border-white/8 opacity-55 hover:opacity-100"
                       }`}
                     >
-                      <div
-                        className={`absolute inset-0 bg-[url('/images/luxury-gallery-sprite.png')] bg-[length:220%_220%] ${pos}`}
+                      <img
+                        src={property.image}
+                        alt={label}
+                        className="h-full w-full object-cover"
+                        style={{ objectPosition: GALLERY_POSITIONS[i] }}
                       />
                     </button>
                   ))}

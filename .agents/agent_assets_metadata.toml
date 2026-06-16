@@ -1,0 +1,38 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "Z6GbbU-K--iEmDhzb13Kx"
+uri = "file://artifacts/cinematic-villa/public/images/prop-aravalli.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "d9CwSmGZoifgHO81Lv9Vt"
+uri = "file://artifacts/cinematic-villa/public/images/prop-juhu.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "8CGokD2xhtPqQHLhEXSpn"
+uri = "file://artifacts/cinematic-villa/public/images/prop-sky-house.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "pH74VNfi2aEYxo4j-BTdK"
+uri = "file://artifacts/cinematic-villa/public/images/prop-alipore.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "IjN2FOp9qJZ-5NI1OZ8-j"
+uri = "file://artifacts/cinematic-villa/public/images/prop-ecr.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Rea9BS6T1A9naxWsKvrEg"
+uri = "file://artifacts/cinematic-villa/public/images/prop-lutyens.png"
+type = "image"
+title = "generated_image"

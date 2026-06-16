@@ -37,10 +37,10 @@ export default function Scene() {
           powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
         }}
-        camera={{ position: [0, 2.2, 8.5], fov: 38, near: 0.1, far: 80 }}
+        camera={{ position: [0, 3.0, 16], fov: 52, near: 0.1, far: 100 }}
       >
         <color attach="background" args={["#000000"]} />
-        <fog attach="fog" args={["#020202", 7, 28]} />
+        <fog attach="fog" args={["#020202", 12, 45]} />
         <Suspense fallback={null}>
           <Environment preset="city" background={false} blur={0.45} />
           <Lighting />

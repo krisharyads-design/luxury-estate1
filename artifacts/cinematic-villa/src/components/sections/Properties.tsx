@@ -40,12 +40,16 @@ export function Properties({ onBookConsultation }: PropertiesProps) {
               data-fade-panel
               key={property.name}
               className="property-card group cursor-pointer overflow-hidden border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-xl transition duration-500 hover:-translate-y-2 hover:border-gold-300/40"
-              onClick={() => navigate(`/property/${property.id}`)}
+              onClick={() => {
+                sessionStorage.setItem("homeScrollY", String(window.scrollY));
+                navigate(`/property/${property.id}`);
+              }}
             >
               <div className="relative aspect-[1.35] overflow-hidden">
-                <div
-                  className={`absolute inset-0 bg-[url('/images/luxury-gallery-sprite.png')] bg-[length:210%_210%] ${property.imagePosition} opacity-90 transition duration-700 group-hover:scale-110`}
-                  aria-label={`${property.name} property image`}
+                <img
+                  src={property.image}
+                  alt={property.name}
+                  className="absolute inset-0 h-full w-full object-cover opacity-90 transition duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/45 px-4 py-2 text-xs uppercase tracking-[0.26em] text-white/74 backdrop-blur-md">
