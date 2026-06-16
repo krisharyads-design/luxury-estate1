@@ -1,64 +1,15 @@
-
-
 import { CalendarDays, MapPin, Phone, ShieldCheck } from "lucide-react";
+import { useLocation } from "wouter";
 import { MagneticButton } from "@/components/ui/MagneticButton";
-
-const properties = [
-  {
-    name: "Aravalli Crest Villa",
-    location: "Gurugram, Haryana",
-    price: "₹12.8 Cr",
-    agent: "Aarav Mehta",
-    tag: "Private pool villa",
-    imagePosition: "bg-left-top"
-  },
-  {
-    name: "Juhu Sea Pearl",
-    location: "Mumbai, Maharashtra",
-    price: "₹22.4 Cr",
-    agent: "Priya Nair",
-    tag: "Sea-facing duplex",
-    imagePosition: "bg-right-top"
-  },
-  {
-    name: "Indiranagar Sky House",
-    location: "Bengaluru, Karnataka",
-    price: "₹8.6 Cr",
-    agent: "Rohan Iyer",
-    tag: "Penthouse residence",
-    imagePosition: "bg-left-bottom"
-  },
-  {
-    name: "Alipore Garden Estate",
-    location: "Kolkata, West Bengal",
-    price: "₹10.9 Cr",
-    agent: "Ananya Sen",
-    tag: "Heritage garden home",
-    imagePosition: "bg-right-bottom"
-  },
-  {
-    name: "ECR Azure Retreat",
-    location: "Chennai, Tamil Nadu",
-    price: "₹7.9 Cr",
-    agent: "Vikram Rao",
-    tag: "Coastal weekend estate",
-    imagePosition: "bg-center"
-  },
-  {
-    name: "Lutyens Court Residence",
-    location: "New Delhi",
-    price: "₹31 Cr",
-    agent: "Kavya Malhotra",
-    tag: "Ultra-prime apartment",
-    imagePosition: "bg-right"
-  }
-];
+import { properties } from "@/data/properties";
 
 type PropertiesProps = {
   onBookConsultation: () => void;
 };
 
 export function Properties({ onBookConsultation }: PropertiesProps) {
+  const [, navigate] = useLocation();
+
   return (
     <section className="relative px-5 py-32">
       <div className="mx-auto max-w-7xl">
@@ -88,7 +39,8 @@ export function Properties({ onBookConsultation }: PropertiesProps) {
             <article
               data-fade-panel
               key={property.name}
-              className="property-card group overflow-hidden border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-xl transition duration-500 hover:-translate-y-2 hover:border-gold-300/40"
+              className="property-card group cursor-pointer overflow-hidden border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-xl transition duration-500 hover:-translate-y-2 hover:border-gold-300/40"
+              onClick={() => navigate(`/property/${property.id}`)}
             >
               <div className="relative aspect-[1.35] overflow-hidden">
                 <div
@@ -115,7 +67,11 @@ export function Properties({ onBookConsultation }: PropertiesProps) {
                   <p className="text-xs uppercase tracking-[0.32em] text-white/42">Agent</p>
                   <p className="mt-1 text-lg font-medium text-white/88">{property.agent}</p>
                 </div>
-                <MagneticButton onClick={onBookConsultation} variant="ghost" className="h-11 min-w-36 px-4 text-xs">
+                <MagneticButton
+                  onClick={(e) => { e.stopPropagation(); onBookConsultation(); }}
+                  variant="ghost"
+                  className="h-11 min-w-36 px-4 text-xs"
+                >
                   Consult
                 </MagneticButton>
               </div>
